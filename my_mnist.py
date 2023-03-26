@@ -39,6 +39,7 @@ class Loader():
     def rotate(self,img):
         angle = random.randint(0, 150) 
         img = np.rot90(img, int(angle/90))
+        
         return img
 
     def batch_generator(self,images, labels, batch_size):
@@ -53,15 +54,11 @@ class Loader():
             yield torch.Tensor(batch_images), torch.tensor(batch_labels) 
 
     # функция для проверки содержимого батчей 
-    def test_batch(self):
-        path = './MNIST/raw/'
-        X_train, y_train = self.load_mnist(path, kind='train')
-        batch_size = 10
-        train_generator = self.batch_generator(X_train, y_train, batch_size)
+    def test_batch(self, train_generator):
         #print(train_generator)
 
         for data in train_generator:    
-            print(data)
+            #print(data)
             break
 
         X, y = data[0][0], data[1][0]
@@ -75,12 +72,13 @@ class Net(nn.Module):
         super(Net, self).__init__()
         # первый сверточный слой
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         # второй сверточный слой
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
         # слой максимального пулинга
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         # слой преобразования данных
-        self.fc1 = nn.Linear(64 * 14 * 14, 128)
+        self.fc1 = nn.Linear(64 * 7 * 7, 128)
         # выходной слой
         self.fc2 = nn.Linear(128, 10)
 
@@ -88,6 +86,7 @@ class Net(nn.Module):
         #применяем первый сверточный слой
         x = self.conv1(x)
         x = nn.functional.relu(x)
+        x = self.maxpool(x)
         #применяем второй сверточный слой
         x = self.conv2(x)
         x = nn.functional.relu(x)
@@ -100,12 +99,14 @@ class Net(nn.Module):
         x = nn.functional.relu(x)
         #выходной слой
         x = self.fc2(x)
+        x = nn.functional.softmax(x, dim = 1)
         return x
 
 
 def train(model, optimizer, criterion, train_loader, num_epochs):
     for epoch in range(num_epochs):
         running_loss = 0.0
+        loss_sum = 0.0
         for i, (inputs, labels) in enumerate(train_loader):
             #обнуляем градиенты
             optimizer.zero_grad()
@@ -120,11 +121,14 @@ def train(model, optimizer, criterion, train_loader, num_epochs):
             optimizer.step()
             #суммируем потери
             running_loss += loss.item()
-            if i % 2000 == 1999:
+            loss_sum += running_loss
+            if i % 1000 == 999:
                 #выводим промежуточные результаты каждые 2000 мини-пакетов
+                print(running_loss)
                 print('[%d, %5d] loss: %.3f' %
-                      (epoch + 1, i + 1, running_loss / 2000))
+                      (epoch + 1, i + 1, running_loss / 1000))
                 running_loss = 0.0
+        print("loss for ", epoch," epoch is ", loss_sum / 6000)
     print('Finished Training')
 
 if __name__ == "__main__" :
@@ -132,10 +136,11 @@ if __name__ == "__main__" :
     X_train, y_train = loader.load_mnist(kind='train')
     batch_size = 10
     train_generator = loader.batch_generator(X_train, y_train, batch_size)
+    #loader.test_batch(train_generator)
     net =  Net()
-    optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=0.05, momentum=0.9)
     criterion = nn.NLLLoss()
-    train(net, optimizer, criterion, train_generator, 1)
+    train(net, optimizer, criterion, train_generator, 10)
 
 
 
