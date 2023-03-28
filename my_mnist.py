@@ -7,6 +7,7 @@ import random
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import math
 
 class Loader():
     def __init__(self, path):
@@ -36,11 +37,48 @@ class Loader():
         new_imgs = np.clip(images + noise, 0, 1)
         return new_imgs
 
-    def rotate(self,img):
-        angle = random.randint(0, 150) 
-        img = np.rot90(img, int(angle/90))
+    def rotate(self,image):
+        angle = random.randint(0, 100) 
+        angle=math.radians(angle)                              
+        cos=math.cos(angle)
+        sin=math.sin(angle)
+        height=image.shape[0]                                   
+        width=image.shape[1]                                    
+
+        # вычисление новых размеров повернутой картинки 
+        new_height  = round(abs(height*cos)+abs(width*sin))+1
+        new_width  = round(abs(width*cos)+abs(height*sin))+1
+
+        # создание массива нового размера 
+        output=np.zeros((new_height,new_width, 1))
+
+        # центр старой картинки 
+        orig_centre_h   = round(((height+1)/2)-1)
+        orig_centre_w   = round(((width+1)/2)-1) 
+
+        # центр новой картинки
+        new_centre_h= round(((new_height+1)/2)-1)        
+        new_centre_w= round(((new_width+1)/2)-1)          
+
+        for i in range(height):
+            for j in range(width):
+                #коородинаты пикселя относительно центра 
+                y=height-1-i-orig_centre_h                   
+                x=width-1-j-orig_centre_w                      
+
+                #новые координаты
+                new_y=round(-x*sin+y*cos)
+                new_x=round(x*cos+y*sin)
+
+                new_y=new_centre_h-new_y
+                new_x=new_centre_w-new_x
+                 
+                if 0 <= new_x < new_width and 0 <= new_y < new_height and new_x>=0 and new_y>=0:
+                    output[new_y,new_x]=image[i,j]                         
+        output = cv2.resize(output,(28,28))
         
-        return img
+        return output
+        
 
     def batch_generator(self,images, labels, batch_size):
         num_samples = images.shape[0] #считаем сколько строк в массиве, соответственно сколько картинок всего было получено
@@ -49,7 +87,7 @@ class Loader():
             start = i * batch_size
             end = (i + 1) * batch_size
             # заполняем массив batch_images, изменяем размер картинок на массив 28*28, применяем вращение и зашумление 
-            batch_images = np.array([[self.noise_img(self.rotate(img.reshape(28,28)), 0.5, 0.1)] for img in images[start:end]])
+            batch_images = np.array([[self.noise_img(self.rotate(img.reshape(28,28)), 0.3, 0.1)] for img in images[start:end]])
             batch_labels = labels[start:end]
             yield torch.Tensor(batch_images), torch.tensor(batch_labels) 
 
@@ -103,11 +141,12 @@ class Net(nn.Module):
         return x
 
 
-def train(model, optimizer, criterion, train_loader, num_epochs):
+def train(model, optimizer, criterion, num_epochs):
     for epoch in range(num_epochs):
         running_loss = 0.0
         loss_sum = 0.0
-        for i, (inputs, labels) in enumerate(train_loader):
+        train_generator = loader.batch_generator(X_train, y_train, batch_size)
+        for i, (inputs, labels) in enumerate(train_generator):
             #обнуляем градиенты
             optimizer.zero_grad()
             
@@ -136,11 +175,13 @@ if __name__ == "__main__" :
     X_train, y_train = loader.load_mnist(kind='train')
     batch_size = 10
     train_generator = loader.batch_generator(X_train, y_train, batch_size)
-    #loader.test_batch(train_generator)
+    loader.test_batch(train_generator)
     net =  Net()
-    optimizer = optim.SGD(net.parameters(), lr=0.05, momentum=0.9)
-    criterion = nn.NLLLoss()
-    train(net, optimizer, criterion, train_generator, 10)
+    optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
+    #criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss()
+    train(net, optimizer, criterion, 5)
+    
 
 
 
