@@ -170,6 +170,40 @@ def train(model, optimizer, criterion, num_epochs):
         print("loss for ", epoch," epoch is ", loss_sum / 6000)
     print('Finished Training')
 
+def test(model, test_loader):
+    model.eval()
+    correct = 0
+    total = 0
+    true_positives = 0
+    false_positives = 0
+    false_negatives = 0
+
+    with torch.no_grad():
+        for data, labels in test_loader:
+            
+            outputs = model(data)
+            predicted = torch.argmax(outputs, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+            true_positives += ((predicted == 1) & (labels == 1)).sum().item()
+            false_positives += ((predicted == 1) & (labels == 0)).sum().item()
+            false_negatives += ((predicted == 0) & (labels == 1)).sum().item()
+
+    accuracy = correct / total
+    recall = true_positives / (true_positives + false_negatives)
+    precision = true_positives / (true_positives + false_positives)
+    f1 = 2 * ((precision * recall) / (precision + recall))
+
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"F1 Score: {f1:.4f}")
+
+    return accuracy, recall, precision, f1
+
+
+
 if __name__ == "__main__" :
     loader = Loader('./MNIST/raw/')
     X_train, y_train = loader.load_mnist(kind='train')
@@ -181,6 +215,11 @@ if __name__ == "__main__" :
     #criterion = nn.NLLLoss()
     criterion = nn.CrossEntropyLoss()
     train(net, optimizer, criterion, 5)
+    X_test, y_test = loader.load_mnist(kind='t10k')
+    train_generator = loader.batch_generator(X_train, y_train, batch_size)
+    test(net, train_generator)
+
+
     
 
 
